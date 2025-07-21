@@ -1,21 +1,30 @@
+// routes/taskRoutes.js
 import express from "express";
-import {
-  createTask,
-  getTasks,
-  updateTask,
-  deleteTask,
-} from "../controllers/taskController.js";
-
-import authMiddleware from "../middleware/authMiddleware.js";
+import Task from "../models/Task.js";
 
 const router = express.Router();
 
-router.use(authMiddleware); // Protect all routes below
+// No token, no auth, direct creation
 
-router.post("/", createTask);
-router.get("/", getTasks);
-router.put("/:id", updateTask);
-router.delete("/:id", deleteTask);
+// Create Task
+router.post("/", async (req, res) => {
+  try {
+    const task = new Task(req.body);
+    const savedTask = await task.save();
+    res.status(201).json(savedTask);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get Tasks
+router.get("/", async (req, res) => {
+  try {
+    const tasks = await Task.find();
+    res.status(200).json(tasks);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 export default router;
-

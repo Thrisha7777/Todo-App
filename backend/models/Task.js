@@ -1,3 +1,4 @@
+// models/Task.js
 import mongoose from "mongoose";
 
 const taskSchema = new mongoose.Schema(
@@ -9,8 +10,6 @@ const taskSchema = new mongoose.Schema(
       enum: ["pending", "in-progress", "completed"],
       default: "pending",
     },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    sharedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );
