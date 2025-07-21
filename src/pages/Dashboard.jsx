@@ -1,156 +1,130 @@
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import './Dashboard.css';
 
 const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [taskInput, setTaskInput] = useState('');
+  const [taskDate, setTaskDate] = useState(new Date());
+  const [editTaskId, setEditTaskId] = useState(null);
 
-  const fetchTasks = async () => {
-    try {
-      const res = await fetch("http://localhost:5001/api/tasks");
-      const data = await res.json();
-      setTasks(data);
-    } catch (err) {
-      console.error("Error fetching tasks:", err);
-    }
-  };
-
+  // Load tasks from MongoDB
   useEffect(() => {
-    fetchTasks();
+    fetch("http://localhost:5001/api/tasks")
+      .then(res => res.json())
+      .then(data => setTasks(data))
+      .catch(err => console.error("Fetch error:", err));
   }, []);
 
-  const handleAddTask = async (e) => {
-    e.preventDefault();
-    if (!title.trim() || !description.trim()) {
-      alert("Please fill in both title and description");
-      return;
-    }
+  const handleAddOrUpdateTask = async () => {
+    if (!taskInput.trim()) return;
 
-    const newTask = {
-      title,
-      description,
-      status: "pending",
+    const taskData = {
+      title: taskInput,
+      description: taskDate.toLocaleDateString(), // Store due date in description for now
     };
 
     try {
-      const res = await fetch("http://localhost:5001/api/tasks", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newTask),
-      });
-
-      if (!res.ok) throw new Error("Failed to save task");
-
-      const savedTask = await res.json();
-      setTasks([savedTask, ...tasks]);
-      setTitle("");
-      setDescription("");
+      if (editTaskId) {
+        // Update task
+        const res = await fetch(`http://localhost:5001/api/tasks/${editTaskId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(taskData),
+        });
+        const updated = await res.json();
+        setTasks(prev => prev.map(t => (t._id === editTaskId ? updated : t)));
+        setEditTaskId(null);
+      } else {
+        // Add task
+        const res = await fetch("http://localhost:5001/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(taskData),
+        });
+        const newTask = await res.json();
+        setTasks(prev => [...prev, newTask]);
+      }
+      setTaskInput('');
+      setTaskDate(new Date());
     } catch (err) {
-      console.error("Error saving task:", err);
-      alert("Error saving task. Please try again.");
+      console.error("Save error:", err);
     }
   };
 
-  const handleComplete = (id) => {
-    const updatedTasks = tasks.map((task) =>
-      task._id === id ? { ...task, status: "completed" } : task
-    );
-    setTasks(updatedTasks);
+  const handleDeleteTask = async (id) => {
+    try {
+      await fetch(`http://localhost:5001/api/tasks/${id}`, { method: "DELETE" });
+      setTasks(prev => prev.filter(t => t._id !== id));
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
   };
 
-  const handleDelete = (id) => {
-    const updatedTasks = tasks.filter((task) => task._id !== id);
-    setTasks(updatedTasks);
+  const handleEditTask = (task) => {
+    setTaskInput(task.title);
+    setTaskDate(new Date(task.description));
+    setEditTaskId(task._id);
   };
 
   return (
-    <div className="container">
-      <h2>📋 Task Manager</h2>
-      <form onSubmit={handleAddTask} style={formStyle}>
-        <input
-          type="text"
-          placeholder="Task title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={inputStyle}
-        />
-        <input
-          type="text"
-          placeholder="Task description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={inputStyle}
-        />
-        <button type="submit" style={addBtn}>➕ Add Task</button>
-      </form>
+    <div className="dashboard-container">
+      <div className="dashboard-header">
+        <h2>TASK BOARD</h2>
+        <button className="logout-btn" onClick={() => window.location.href = '/'}>Logout</button>
+      </div>
 
-      {tasks.length === 0 ? (
-        <p>No tasks yet.</p>
-      ) : (
-        tasks.map((task) => (
-          <div key={task._id} style={cardStyle}>
-            <h3>{task.title}</h3>
-            <p>{task.description}</p>
-            <p>
-              Status:{" "}
-              <strong style={{ color: task.status === "completed" ? "green" : task.status === "in-progress" ? "orange" : "red" }}>
-                {task.status}
-              </strong>
-            </p>
-            {task.status !== "completed" && (
-              <button onClick={() => handleComplete(task._id)}>✔️ Complete</button>
-            )}
-            <button
-              onClick={() => handleDelete(task._id)}
-              style={{
-                marginLeft: "10px",
-                backgroundColor: "#dc3545",
-                color: "white",
-                border: "none",
-                padding: "8px 12px",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
-            >
-              🗑️ Delete
-            </button>
-          </div>
-        ))
-      )}
+      <div className="task-input-section">
+        <input
+          type="text"
+          placeholder={editTaskId ? "Update task title" : "Enter a task"}
+          value={taskInput}
+          onChange={(e) => setTaskInput(e.target.value)}
+        />
+        <DatePicker
+          selected={taskDate}
+          onChange={(date) => setTaskDate(date)}
+          dateFormat="dd/MM/yyyy"
+          className="date-picker"
+        />
+        <button onClick={handleAddOrUpdateTask}>
+          {editTaskId ? "Update" : "Add"}
+        </button>
+      </div>
+
+      <div className="task-list-section">
+        <h3>Your Tasks</h3>
+        {tasks.length === 0 ? (
+          <p className="no-task">No tasks yet.</p>
+        ) : (
+          tasks.map((task) => (
+            <div key={task._id} className="task-item">
+              <div>
+                <strong>{task.title}</strong>
+                <p className="task-date">📅 {task.description}</p>
+              </div>
+             <div className="task-actions">
+  <button 
+    onClick={() => handleEdit(task)} 
+    style={{ marginRight: "8px", padding: "6px 12px", background: "#f0ad4e", border: "none", color: "white", borderRadius: "5px" }}
+  >
+    Update
+  </button>
+  <button 
+    onClick={() => handleDelete(task._id)} 
+    style={{ padding: "6px 12px", background: "#d9534f", border: "none", color: "white", borderRadius: "5px" }}
+  >
+    Delete
+  </button>
+</div>
+
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
-};
-
-const formStyle = {
-  marginBottom: "20px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "10px",
-  maxWidth: "400px",
-};
-const inputStyle = {
-  padding: "8px",
-  fontSize: "16px",
-  borderRadius: "4px",
-  border: "1px solid #ccc",
-};
-const addBtn = {
-  backgroundColor: "#28a745",
-  color: "white",
-  border: "none",
-  padding: "10px",
-  borderRadius: "5px",
-  cursor: "pointer",
-};
-const cardStyle = {
-  backgroundColor: "#f9f9f9",
-  border: "1px solid #ddd",
-  borderRadius: "8px",
-  padding: "16px",
-  marginBottom: "16px",
-  textAlign: "left",
 };
 
 export default Dashboard;
